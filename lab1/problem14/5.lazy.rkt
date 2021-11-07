@@ -21,9 +21,11 @@
     (map cons ls ns)))
 
 
-(define longest (argmax car (!! (take 1000000 lns))))
-
-
+; (define longest (argmax car (!! (take 1000000 lns))))
+; 
+; 
+; (require racket)
+; 
 ; (display (~a "The longest Collatz sequence is started from " (cdr longest)
 ;              " and of length " (car longest)))
 ; (newline)

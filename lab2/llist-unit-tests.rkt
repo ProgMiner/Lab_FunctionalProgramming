@@ -14,16 +14,18 @@
     (letrec [(fibonacci-list-from
                (lambda (a b)
                  (let ([c (+ a b)])
-                   (llist
-                     (lambda ()
-                       (cons c (fibonacci-list-from b c)))))))]
+                   (llist-cons c (fibonacci-list-from b c)))))]
       (fibonacci-list-from 1 0))))
+
+(define (llist-comp l)
+  (let [(v (llist-value l))]
+    (if (procedure? v) (v) v)))
 
 (define test-llist-null
   (test-suite "llist-null"
     (test-case "llist-null is empty"
       (check-equal?
-        ((llist-get llist-null))
+        (llist-comp llist-null)
         null))))
 
 (define test-llist-cons
@@ -31,22 +33,22 @@
     (test-case "llist-cons appends x"
       (let ([l (llist-cons 'x llist-null)])
         (check-equal?
-          (car ((llist-get l)))
+          (car (llist-comp l))
           'x
           "llist-cons don't appends x")
         (check-eq?
-          (cdr ((llist-get l)))
+          (cdr (llist-comp l))
           llist-null
           "llist-cons don't save tail")))
 
     (test-case "llist-cons appends x to infinite list"
       (let ([l (llist-cons 'x fibonacci-list)])
         (check-equal?
-          (car ((llist-get l)))
+          (car (llist-comp l))
           'x
           "llist-cons don't appends x")
         (check-eq?
-          (cdr ((llist-get l)))
+          (cdr (llist-comp l))
           fibonacci-list
           "llist-cons don't save tail")))))
 
@@ -54,36 +56,36 @@
   (test-suite "list->llist"
     (test-case "list->llist can make empty llist"
       (check-equal?
-        ((llist-get (list->llist null)))
+        (llist-comp (list->llist null))
         null))
 
     (test-case "list->llist can make llist with one element"
       (let ([l (list->llist (list 'test))])
         (check-equal?
-          (car ((llist-get l)))
+          (car (llist-comp l))
           'test
           "list->llist result has bad head")
         (check-equal?
-          ((llist-get (cdr ((llist-get l)))))
+          (llist-comp (cdr (llist-comp l)))
           null
           "list->llist result has bad tail")))
 
     (test-case "list->llist can make llist with more than one element"
       (let ([l (list->llist (list 'a 'b 'c))])
         (check-equal?
-          (car ((llist-get l)))
+          (car (llist-comp l))
           'a
           "list->llist result has bad first element")
         (check-equal?
-          (car ((llist-get (cdr ((llist-get l))))))
+          (car (llist-comp (cdr (llist-comp l))))
           'b
           "list->llist result has bad second element")
         (check-equal?
-          (car ((llist-get (cdr ((llist-get (cdr ((llist-get l)))))))))
+          (car (llist-comp (cdr (llist-comp (cdr (llist-comp l))))))
           'c
           "list->llist result has bad third element")
         (check-equal?
-          ((llist-get (cdr ((llist-get (cdr ((llist-get (cdr ((llist-get l)))))))))))
+          (llist-comp (cdr (llist-comp (cdr (llist-comp (cdr (llist-comp l)))))))
           null
           "list->llist result has bad end")))))
 
@@ -119,7 +121,7 @@
           "llist-tail result first element wrong")
 
         (check-true
-          (llist-null? (cdr ((llist-get l))))
+          (llist-null? (cdr (llist-comp l)))
           "llist-tail result has wrong length")))
 
     (test-case "llist-tail returns tail element of infinite list"

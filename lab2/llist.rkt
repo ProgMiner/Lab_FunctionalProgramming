@@ -1,8 +1,10 @@
 #lang racket
 
+(require racket/trace)
+
 (provide
   llist
-  llist-get
+  llist-value
   llist-null
   llist-cons
   list->llist
@@ -19,20 +21,30 @@
   llist-for-each
   llist-take
   llist-drop
-  llist-append)
+  llist-append
+  llist-range)
 
 
-; data LList a = LCons (() -> (a, LList a)) | LNull (() -> ())
+; data LList a = LList v
+;   v is       v' - evaluated list
+;   v is () -> v' - non-evaluated list
+;   v' is (          ) - empty list
+;   v' is (a, LList a) - non-empty list
 ;
-; llist-get :: LList a -> () -> (a, LList a)
-(struct llist (get))
+; llist-value :: LList a -> v
+; set-llist-value! :: LList a -> v -> ()
+(struct llist (value) #:mutable)
 
 ; llist-null :: LList a
-(define llist-null (llist (lambda () '())))
+(define llist-null (llist null))
+
+; llist-lambda :: (a, LList a) -> LList a
+(define-syntax-rule (llist-lambda l)
+  (llist (lambda () l)))
 
 ; llist-cons :: a -> LList a -> LList a
-(define (llist-cons x xs)
-  (llist (lambda () (cons x xs))))
+(define-syntax-rule (llist-cons x xs)
+  (llist-lambda (cons x xs)))
 
 ; list->llist :: [a] -> LList a
 (define (list->llist l)
@@ -40,7 +52,9 @@
 
 ; llist-comp :: LList a -> (a, LList a)
 (define (llist-comp l)
-  ((llist-get l)))
+  (let ([v (llist-value l)])
+    (if (procedure? v) (set-llist-value! l (v)) (void)))
+  (llist-value l))
 
 ; llist-null? :: LList a -> Bool
 (define llist-null? (compose1 null? llist-comp))
@@ -62,30 +76,27 @@
 
 ; llist-ref :: LList a -> Int -> a
 (define (llist-ref l i)
-  (let ([v (llist-comp l)])
-    (cond [(= i 0) (car v)]
-          [(> i 0) (llist-ref (cdr v) (- i 1))])))
+  (cond [(= i 0) (llist-head l)]
+        [(> i 0) (llist-ref (llist-tail l) (- i 1))]))
 
 ; llist-filter :: (a -> Bool) -> LList a -> LList a
 (define (llist-filter f l)
-  (llist
-    (lambda ()
-      (let ([v (llist-comp l)])
-        (if (null? v)
-          null
-          (let ([t (llist-filter f (cdr v))])
-            (if (f (car v))
-              (cons (car v) t)
-              (llist-comp t))))))))
+  (llist-lambda
+    (let ([v (llist-comp l)])
+      (if (null? v)
+        null
+        (let ([t (llist-filter f (cdr v))])
+          (if (f (car v))
+            (cons (car v) t)
+            (llist-comp t)))))))
 
 ; llist-map :: (a -> b) -> LList a -> LList b
 (define (llist-map f l)
-  (llist
-    (lambda ()
-      (let ([v (llist-comp l)])
-        (if (null? v)
-          null
-          (cons (f (car v)) (llist-map f (cdr v))))))))
+  (llist-lambda
+    (let ([v (llist-comp l)])
+      (if (null? v)
+        null
+        (cons (f (car v)) (llist-map f (cdr v)))))))
 
 ; llist-foldl :: (b -> a -> b) -> b -> LList a -> b
 (define (llist-foldl f a l)
@@ -117,10 +128,9 @@
 ; llist-take :: LList a -> Int -> LList a
 (define (llist-take l n)
   (cond [(= n 0) llist-null]
-        [(> n 0) (llist
-                   (lambda ()
-                     (let ([v (llist-comp l)])
-                       (cons (car v) (llist-take (cdr v) (- n 1))))))]))
+        [(> n 0) (llist-lambda
+                   (let ([v (llist-comp l)])
+                     (cons (car v) (llist-take (cdr v) (- n 1)))))]))
 
 ; llist-drop :: LList a -> Int -> LList a
 (define (llist-drop l n)
@@ -131,7 +141,22 @@
 (define (llist-append a b)
   (cond [(llist-null? a) b]
         [(llist-null? b) a]
-        [else (llist
-                (lambda ()
-                  (let ([v (llist-comp a)])
-                    (cons (car v) (llist-append (cdr v) b)))))]))
+        [else (llist-lambda
+                (let ([v (llist-comp a)])
+                  (cons (car v) (llist-append (cdr v) b))))]))
+
+; llist-range
+;  :: (Num i) -- number type
+;  => i -- begin
+;  -> i -- end
+;  -> i -- step
+;  -> LList i -- list of numbers from begin to end (exclusive) with step step
+(define (llist-range [b 0] [e +inf.0] [s 1])
+  (define (llist-range-positive b)
+    (if (>= b e) llist-null (llist-cons b (llist-range-positive (+ b s)))))
+
+  (define (llist-range-negative b)
+    (if (<= b e) llist-null (llist-cons b (llist-range-negative (+ b s)))))
+
+  (cond [(< s 0) (llist-range-negative b)]
+        [(> s 0) (llist-range-positive b)]))

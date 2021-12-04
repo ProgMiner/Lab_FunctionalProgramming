@@ -8,7 +8,39 @@
                          [(xb yb) (values (car next-point) (cdr next-point))])
               (+ (/ (* (- x xa) (- yb ya)) (- xb xa)) ya))))))
 
-(define (lagrange-approximate) (void))
+(define (lagrange-approximate first-point)
+  (define (approx ps)
+    ; (display "aaaaaaaaaaaaaaaaaaaaaaaaaaa")(newline)
+    ; (display ps)(newline)
+    ; Ln(x) = sum(y_i * prod((x - x_j) / (x_i - x_j), j = 0..n, j ≠ i), i = 0..n)
+    (lambda (x)
+      (foldl
+        (lambda (p-i sum)
+          (+
+            sum
+            (*
+              (cdr p-i)
+              (foldl
+                (lambda (p-j prod)
+                  ; (display (cons p-i p-j))(newline)
+                  (*
+                    prod
+                    (/
+                      (- x (car p-j))
+                      (- (car p-i) (car p-j)))))
+                1
+                (filter
+                  (lambda (p-j) (not (= (car p-i) (car p-j))))
+                  ps)))))
+        0
+        ps)))
+  (define (next-fn p ps)
+    (cons
+      (lambda (p1) (next-fn p1 (cons p ps)))
+      (approx ps)))
+
+  (lambda (next-point)
+    (next-fn next-point (cons first-point null))))
 
 (define (generate-xs [step 1])
   (define (gen-list from to)

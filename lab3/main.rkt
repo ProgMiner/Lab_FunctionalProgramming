@@ -58,45 +58,60 @@
 (define (points-seq l) (sequence-map (lambda (xs) (apply cons xs)) l))
 
 
-(define (handle-stdin approx generate-xs)
-  (sequence-fold
-    (lambda (acc p)
-      (let* ([approx (car acc)]
-             [generate-xs (cdr acc)]
-             [approx-result (approx p)]
-             [generate-xs-result (generate-xs (car p))])
-        (if (procedure? approx-result)
-          (cons approx-result generate-xs-result)
-          (let ([next-approx (car approx-result)]
-                [next-generate-xs (car generate-xs-result)]
-                [approx-fn (cdr approx-result)]
-                [xs (cdr generate-xs-result)])
-            (for-each
-              (lambda (p)
-                (display (exact->inexact (car p)))
-                (display " ")
-                (display (exact->inexact (cdr p)))
-                (newline))
-              (map (lambda (x) (cons x (approx-fn x))) xs))
-            (cons next-approx next-generate-xs)))))
-    (cons approx generate-xs)
-    ((compose1
-       points-seq
-       filter-points-seq
-       filter-numbers-seq
-       numbers-seq
-       split-seq) (in-lines)))
-  (void))
+(define (display-point p)
+  (display (exact->inexact (car p)))
+  (display " ")
+  (display (exact->inexact (cdr p)))
+  (newline))
+
+(define (map-zip f xs)
+  (map (lambda (x) (cons x (f x))) xs))
+
+(define (handle-stdin approx generate-xs offset)
+  (let ([acc
+          (sequence-fold
+            (lambda (acc p)
+              (let* ([approx (list-ref acc 0)]
+                     [generate-xs (list-ref acc 1)]
+                     [approx-result (approx p)]
+                     [generate-xs-result (generate-xs (if (procedure? approx-result) (car p)
+                                                        (- (car p) offset)))])
+                (if (procedure? approx-result)
+                  (list approx-result generate-xs-result (void))
+                  (let ([next-approx (car approx-result)]
+                        [next-generate-xs (car generate-xs-result)]
+                        [approx-fn (cdr approx-result)]
+                        [xs (cdr generate-xs-result)])
+                    (for-each display-point (map-zip approx-fn xs))
+                    (list next-approx next-generate-xs (cons approx-fn (car p)))))))
+            (list approx generate-xs (void))
+            ((compose1
+               points-seq
+               filter-points-seq
+               filter-numbers-seq
+               numbers-seq
+               split-seq) (in-lines)))])
+    (if (void? (list-ref acc 2))
+      (void)
+      (let ([approx-fn (car (list-ref acc 2))]
+            [last-x (cdr (list-ref acc 2))]
+            [generate-xs (list-ref acc 1)])
+      (for-each display-point (map-zip approx-fn (cdr (generate-xs last-x))))))))
 
 
 (define approximation-function (make-parameter linear-approximate))
-(define approximation-step (make-parameter 1.0))
+(define approximation-step (make-parameter 1))
+(define approximation-offset (make-parameter 0))
 
 (command-line
   #:once-each
   [("-s" "--step") step
     "minimal step of points to approximation, defaults to 1"
-    (approximation-step (string->number step))]
+    (approximation-step (inexact->exact (string->number step)))]
+
+  [("-o" "--offset") offset
+    "offset for delayed approximation, defaults to 0"
+    (approximation-offset (inexact->exact (string->number offset)))]
 
   [("-a" "--algorithm") algorithm
     "approximation algorithm from: linear, lagrange; defaults to linear"
@@ -107,4 +122,4 @@
 
   #:args () (void))
 
-(handle-stdin (approximation-function) (generate-xs (approximation-step)))
+(handle-stdin (approximation-function) (generate-xs (approximation-step)) (approximation-offset))

@@ -10,8 +10,6 @@
 
 (define (lagrange-approximate first-point)
   (define (approx ps)
-    ; (display "aaaaaaaaaaaaaaaaaaaaaaaaaaa")(newline)
-    ; (display ps)(newline)
     ; Ln(x) = sum(y_i * prod((x - x_j) / (x_i - x_j), j = 0..n, j ≠ i), i = 0..n)
     (lambda (x)
       (foldl
@@ -22,7 +20,6 @@
               (cdr p-i)
               (foldl
                 (lambda (p-j prod)
-                  ; (display (cons p-i p-j))(newline)
                   (*
                     prod
                     (/
@@ -35,16 +32,16 @@
         0
         ps)))
   (define (next-fn p ps)
-    (cons
-      (lambda (p1) (next-fn p1 (cons p ps)))
-      (approx ps)))
+    (let ([ps1 (cons p ps)])
+      (cons
+        (lambda (p1) (next-fn p1 ps1))
+        (approx ps1))))
 
-  (lambda (next-point)
-    (next-fn next-point (cons first-point null))))
+  (lambda (next-point) (next-fn next-point (cons first-point null))))
 
 (define (generate-xs [step 1])
   (define (gen-list from to)
-    (if (>= from to) null (cons from (gen-list (+ from step) to))))
+    (if (> from to) null (cons from (gen-list (+ from step) to))))
 
   (define (generate-xs first-x)
     (lambda (next-x)
@@ -55,7 +52,7 @@
   generate-xs)
 
 (define (split-seq l) (sequence-map string-split l))
-(define (numbers-seq l) (sequence-map (lambda (xs) (map string->number xs)) l))
+(define (numbers-seq l) (sequence-map (lambda (xs) (map (compose1 inexact->exact string->number) xs)) l))
 (define (filter-numbers-seq l) (sequence-filter (lambda (xs) (andmap number? xs)) l))
 (define (filter-points-seq l) (sequence-filter (lambda (xs) (= 2 (length xs))) l))
 (define (points-seq l) (sequence-map (lambda (xs) (apply cons xs)) l))

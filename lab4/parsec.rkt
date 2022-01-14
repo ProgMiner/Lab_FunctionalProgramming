@@ -11,10 +11,13 @@
   parsec/result-tail
   parsec/result-pos
   parsec/result-data
+  parsec/pos>?
+  parsec/pos->string
   parsec/parse
   parsec/is-success
   parsec/get-success
   parsec/get-errors
+  parsec/print-errors
   parsec/fmap
   parsec/pure
   parsec/apply
@@ -90,6 +93,12 @@
       (> a-col b-col)
       (> a-row b-row))))
 
+(define (parsec/pos->string pos)
+  (string-append
+    (number->string (parsec/pos-row pos))
+    ":"
+    (number->string (parsec/pos-col pos))))
+
 (define (parsec/map-results f results)
   (map
     (lambda (result)
@@ -120,10 +129,37 @@
 (define (parsec/get-success results)
   (filter parsec/result? results))
 
+(define (parsec/remove-duplicated-errors errors)
+  (reverse
+    (foldl
+      (lambda (e errs)
+        (cond
+          [(empty? errs) (list e)]
+          [(equal? e (car errs)) errs]
+          [else (cons e errs)]))
+      null
+      errors)))
+
 (define (parsec/get-errors results)
   (let* ([errors (sort (filter parsec/error? results) parsec/pos>? #:key parsec/error-pos)]
-         [max-pos (parsec/error-pos (car errors))])
-    (filter (lambda (e) (equal? (parsec/error-pos e) max-pos)) errors)))
+         [max-pos (parsec/error-pos (car errors))]
+         [last-errors (filter (lambda (e) (equal? (parsec/error-pos e) max-pos)) errors)]
+         [last-errors-sorted (sort last-errors string<? #:key parsec/error-message)]
+         [uniq-errors (parsec/remove-duplicated-errors last-errors-sorted)])
+    uniq-errors))
+
+(define (parsec/print-errors results)
+  (let ([errors (parsec/get-errors results)])
+    (for-each
+      (lambda (e)
+        (display
+          (string-append
+            "- At "
+            (parsec/pos->string (parsec/error-pos e))
+            " parsing error: "
+            (parsec/error-message e)
+            "\n")))
+      errors)))
 
 
 ; instance Functor Parser where
@@ -250,12 +286,11 @@
           (if (pred h)
             (list (parsec/result (substring str 1) (parsec/pos-inc pos h) h))
             (list (parsec/error str pos (string-append
-                                          "unexpected character \""
-                                          (string h)
-                                          "\"")))))))))
+                                          "unexpected character "
+                                          (~s (string h)))))))))))
 
 (define (parsec/char c)
-  (let ([err-tail (string-append "expected \"" (string c) "\"")])
+  (let ([err-tail (string-append "expected " (~s (string c)))])
     (parsec/parser
       (lambda (pos str)
         (if (string=? str "")
@@ -264,9 +299,9 @@
             (if (char=? h c)
               (list (parsec/result (substring str 1) (parsec/pos-inc pos h) h))
               (list (parsec/error str pos (string-append
-                                            "unexpected character \""
-                                            (string h)
-                                            "\", "
+                                            "unexpected character "
+                                            (~s (string h))
+                                            ", "
                                             err-tail))))))))))
 
 (define (parsec/string s)
@@ -277,15 +312,15 @@
       #f
       (string=? (substring str 0 s-len) s)))
 
-  (let ([err-tail (string-append "expected \"" s "\"")])
+  (let ([err-tail (string-append "expected " (~s s))])
     (parsec/parser
       (lambda (pos str)
         (if (starts-with str)
           (list (parsec/result (substring str s-len) (parsec/pos-append pos s) s))
           (list (parsec/error str pos (string-append
-                                        "unexpected string \""
-                                        (substring str 0 (min s-len (string-length str)))
-                                        "\", "
+                                        "unexpected string "
+                                        (~s (substring str 0 (min s-len (string-length str))))
+                                        ", "
                                         err-tail))))))))
 
 (define parsec/whitespaces (parsec/many (parsec/char-if char-whitespace?)))
@@ -362,7 +397,7 @@
           (number->string (parsec/pos-row pos))
           ", "
           (number->string (parsec/pos-col pos))
-          "). Input: \""
-          str
-          "\"\n"))
+          "). Input: "
+          (~s str)
+          "\n"))
       (list (parsec/result str pos null)))))
